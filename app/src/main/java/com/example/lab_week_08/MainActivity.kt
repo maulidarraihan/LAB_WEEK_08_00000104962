@@ -1,22 +1,33 @@
 package com.example.lab_week_08
 
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.work.*
-
 import com.example.lab_week_08.worker.FirstWorker
 import com.example.lab_week_08.worker.SecondWorker
 
 class MainActivity : AppCompatActivity() {
 
-    private val workManager by lazy {
-        WorkManager.getInstance(this)
-    }
+    private val workManager by lazy { WorkManager.getInstance(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(
+                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1
+                )
+            }
+        }
 
         val networkConstraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -24,14 +35,12 @@ class MainActivity : AppCompatActivity() {
 
         val id = "001"
 
-        val firstRequest = OneTimeWorkRequest
-            .Builder(FirstWorker::class.java)
+        val firstRequest = OneTimeWorkRequest.Builder(FirstWorker::class.java)
             .setConstraints(networkConstraints)
             .setInputData(getIdInputData(FirstWorker.INPUT_DATA_ID, id))
             .build()
 
-        val secondRequest = OneTimeWorkRequest
-            .Builder(SecondWorker::class.java)
+        val secondRequest = OneTimeWorkRequest.Builder(SecondWorker::class.java)
             .setConstraints(networkConstraints)
             .setInputData(getIdInputData(SecondWorker.INPUT_DATA_ID, id))
             .build()
@@ -51,6 +60,7 @@ class MainActivity : AppCompatActivity() {
             .observe(this) { info ->
                 if (info.state.isFinished) {
                     showResult("Second process is done")
+                    launchNotificationService()
                 }
             }
     }
@@ -62,5 +72,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun showResult(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun launchNotificationService() {
+
+        NotificationService.trackingCompletion.observe(this) { Id ->
+            showResult("Process for Notification Channel ID $Id is done!")
+        }
+
+        val serviceIntent = Intent(this, NotificationService::class.java).apply {
+            putExtra(EXTRA_ID, "001")
+        }
+
+        ContextCompat.startForegroundService(this, serviceIntent)
+    }
+
+    companion object {
+        const val EXTRA_ID = "Id"
     }
 }
